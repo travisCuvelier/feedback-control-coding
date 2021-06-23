@@ -1,4 +1,4 @@
-classdef cuttoffCounts32 < handle
+classdef cutoffCounts32 < handle
     %UNTITLED2 Summary of this class goes here
     %   Detailed explanation goes here
     
@@ -44,7 +44,7 @@ classdef cuttoffCounts32 < handle
     
     methods
         %constructor
-        function obj = cuttoffCounts32(cutoff)
+        function obj = cutoffCounts32(cutoff)
             obj.total_iterations = uint32(0);
             obj.maxDenominator =  bitshift(uint32(2^obj.wordSize),-2)-1;    %2(# of symbols)+maxSymbolUpToIncludingTimei+1 can equal this.
             obj.nearMiss = ((obj.maxDenominator-1)/8)*7; %heuristic: don't send any
@@ -56,7 +56,7 @@ classdef cuttoffCounts32 < handle
                 error('your cuttoff is (almost) too numerically large, your model will be almost incompressible')
             end
             obj.lop = uint32((cutoff+1):-1:0);
-            obj.myCDF = obj.lop;
+            obj.myCDF = obj.lop; %this is a uniform CDF
             obj.symbolLimit = cutoff;
         end
         
@@ -88,7 +88,8 @@ classdef cuttoffCounts32 < handle
         
         function c = cumCount(obj,idx)
             if(idx <= (obj.symbolLimit+1))
-                c = obj.ktCDF(idx+1);
+                
+                c = obj.myCDF(idx+1);
             else
                 error('error line 146');
             end

@@ -1,6 +1,4 @@
 classdef countModel32 < handle
-    %our convention for cumulative count differs a bit from that in
-    %Wittin's ACM 87. cumCount[i] = frequency[i]+cumCount[i-1]; 
     
     properties (SetAccess = public, GetAccess = public)
         total_iterations
@@ -62,6 +60,7 @@ classdef countModel32 < handle
         
         %precondition: current model is valid.
         %e.g. denominator is below near miss.
+        
         function updateModel(obj,symbol)
             
        
@@ -133,8 +132,6 @@ classdef countModel32 < handle
             end
             obj.ktCDF(end+1) = 0; %mildly inefficient. for witten's
                                   %convention
-            
-            
         end
         
         %gives it in wittens convention. 

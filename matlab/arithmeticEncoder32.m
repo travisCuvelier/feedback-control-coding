@@ -4,6 +4,8 @@ classdef arithmeticEncoder32 < handle
         
         wordSize = 16;
         precision = 32;
+        codewordMask = uint32(2^16-1);
+
         
         %obj.maxDenominator =  bitshift(uint32(2^obj.wordSize),-2)-1;    %2(# of symbols)+maxSymbolUpToIncludingTimei+1 can equal this.
         %obj.nearMiss = ((obj.maxDenominator-1)/8)*7; %heuristic: don't send any
@@ -67,14 +69,20 @@ classdef arithmeticEncoder32 < handle
         
         end
         
-        function encodeSymbol(obj,symbol)%does not actually even output any bits
-                       
-            range = (obj.high-obj.low)+1; %this is in 32 bits so it won't overflow; 
-            obj.high = obj.low+(range*(obj.model.cumCount(symbol-1)))/obj.model.cumCount(0)-1;
-            obj.low = obj.low + (range*(obj.model.cumCount(symbol)))/obj.model.cumCount(0);
+        
+        function encodeSymbol(obj,symbol)
             
+            symbolIdx = symbol+1; 
+            
+            range = (obj.high-obj.low)+1; %this is in 32 bits so it won't overflow; 
+        
+            obj.high = obj.low+idivide((range*(obj.model.cumCount(symbolIdx-1))),obj.model.cumCount(0))-1;
+         
+            obj.low = obj.low + idivide((range*(obj.model.cumCount(symbolIdx))),obj.model.cumCount(0));
+      
+
             while((obj.high<obj.half)||(obj.low>= obj.half)||((obj.low >= obj.firstQuarter) && (obj.high<obj.thirdQuarter)))
-               
+                
                 if(obj.high<obj.half)
                     obj.bitPlusFollow(false);
                 elseif(obj.low>= obj.half)
@@ -87,17 +95,19 @@ classdef arithmeticEncoder32 < handle
                     obj.high = obj.high-obj.firstQuarter; 
                 end
                 
-                obj.low = bitshift(obj.low,1);
+                %i don't think these masking operations are necessary
+                %debugging likelily culprit.
+             
+
+                obj.low  = bitshift(obj.low,1);
                 obj.high = bitshift(obj.high,1)+1;
-                
-            end
+            end 
             
         end
         
         %precondition buffer is not full
         function bitPlusFollow(obj,bit)
-           
-            
+   
             obj.buff= obj.buff+bitshift(uint16(bit),obj.bidx);
             
             if(obj.bidx == 0)
@@ -121,7 +131,6 @@ classdef arithmeticEncoder32 < handle
                 end 
                 
                 obj.bitsToFollow = obj.bitsToFollow-1;
-            
             end
             
             
@@ -133,10 +142,17 @@ classdef arithmeticEncoder32 < handle
             
             if (obj.low < obj.firstQuarter)
                 bitPlusFollow(obj,false)
+                fprintf('here')
             else
                 bitPlusFollow(obj,true)
+                fprintf('there');
             end
-             
+            
+            %ensure that the last word is written. 
+            while(obj.bidx~=(obj.wordSize-1))
+                bitPlusFollow(obj,false)
+            end
+            
             fclose(obj.file);
         end
             
