@@ -67,34 +67,39 @@ function policy = rateDistortion(A,B,W,Q,R,lqgCost,varargin)
     end
     
     [S,K,~] = idare(A,B,Q,R,zeros(n,size(B,2)),eye(n));
-    K = -K; 
-    Theta = K'*(B'*S*B+R)*K;
-    
-    P = sdpvar(n);
-    V = sdpvar(n);
-    F = [ P>=0, V >=0,trace(Theta*P)+trace(W*S)<= lqgCost,A*P*A'+W-P>=0, [P-V,P*A';A*P,A*P*A'+W]>=0  ];
-    
-    diagnostic=optimize(F,-logdet(V),sdpsettings('solver',solver,'verbose',0));
-    if(diagnostic.problem)
-        s = sprintf('%d\n',diagnostic.problem);
-        warning(strcat('issues with solver, error code = ',s))
-        diagnostic
+    policy.lqgMin = trace(S*W);
+    if(lqgCost > policy.lqgMin)
+        K = -K; 
+        Theta = K'*(B'*S*B+R)*K;
+
+        P = sdpvar(n);
+        V = sdpvar(n);
+        F = [ P>=0, V >=0,trace(Theta*P)+trace(W*S)<= lqgCost,A*P*A'+W-P>=0, [P-V,P*A';A*P,A*P*A'+W]>=0  ];
+
+        diagnostic=optimize(F,-logdet(V),sdpsettings('solver',solver,'verbose',0));
+        if(diagnostic.problem)
+            s = sprintf('%d\n',diagnostic.problem);
+            warning(strcat('issues with solver, error code = ',s))
+            diagnostic
+        end
+
+        policy.minimumBits = .5*(-log2(det(value(V))) +log2(det(W)));
+        policy.P = value(P);
+        policy.SNR = inv(policy.P)-inv(A*policy.P*A'+W);
+        [U,E,~] = svd(policy.SNR);
+        rk = 0;
+        rplus = 1;
+        while(rk < size(E,1) && E(rplus,rplus) ~=0)
+            rk = rplus;
+            rplus = rplus+1;
+        end
+        policy.rank = rk; 
+        Uprime = U*sqrt(E)/sqrt(12);
+        policy.C = (Uprime(:,1:rk))';
+        policy.V = eye(rk)/12;
+        policy.solverDiagnostics = diagnostic;
+    else
+        policy.minimumBits = inf;
     end
-    
-    policy.minimumCost = .5*(-log2(det(value(V))) +log2(det(W)));
-    policy.P = value(P);
-    policy.SNR = inv(policy.P)-inv(A*policy.P*A'+W);
-    [U,E,~] = svd(policy.SNR);
-    rk = 0;
-    rplus = 1;
-    while(rk < size(E,1) && E(rplus,rplus) ~=0)
-        rk = rplus;
-        rplus = rplus+1;
-    end
-    policy.rank = rk; 
-    Uprime = U*sqrt(E)/sqrt(12);
-    policy.C = (Uprime(:,1:rk))';
-    policy.V = eye(rk)/12;
-    policy.solverDiagnostics = diagnostic;
     
 end
