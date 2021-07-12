@@ -361,14 +361,14 @@ classdef uintarb %this is a value class
             
         end
         
-        function new = cast(bits,old)
+        function new = upCast(bits,old)
             
             newWords = ceil(bits/32);
             
             if(bits < old.bits)
-                error('no downcasting, yet'); 
+                error('this function is only for upcasting'); 
             elseif(length(old.value)==newWords)
-                newValue = old.value; 
+                newValue = old.value; %will automally fill zeros
             else
                 newValue = uint32(zeros(1,newWords));
                 newValue(((newWords-length(old.value))+1):end) = uint32(old.value);
@@ -377,6 +377,32 @@ classdef uintarb %this is a value class
             new = uintarb(bits,newValue);
             
         end
+        
+        function [new,overflow] = downCast(bits,old)
+            
+            newWords = ceil(bits/32);
+            overflow = false; 
+            
+            if(bits > old.bits)
+                error('this function is only for downcasting')               
+            else
+                
+                wordDiff = old.words-newWords;
+                newValue = old.value(wordDiff+1:end); %will be masked by uintarbcontstructor
+                newTopWordBits = bits-(newWords-1)*32;
+
+                if(sum(old.value==uint32(0)) < wordDiff || (newTopWordBits~=32 && newValue(1)> uint32(2^newTopWordBits-1)) )
+                    overflow = true;
+                end
+                new = uintarb(bits,newValue);%will mask top word automatically            
+            end
+            
+            
+        end
+        
+             
+        
+        
         
         function new = bitsr(old,bidx,bool)
            
