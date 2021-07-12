@@ -1,16 +1,50 @@
-classdef uintarb %this is a value class
-    %NUMBER Summary of this class goes here
-    %   Detailed explanation goes here
+%uintarb is a matlab value (as opposed to handle) class that is used 
+%to implement arbitrary precision unsigned integer arithmetic. 
+%There is currently support for scalar operations on uintarbs, with 
+%an eye to impelement vectorized operations in the future. 
+
+classdef uintarb 
     
     properties
-        words
-        bits
-        value
-        mask
-        topWordBits
+        
+        words %the number of 32 bit words used to store the 
+              %arbitrary precision integer. Equal to ceil(bits/32). 
+              
+        bits  %the precision of the unsigned integer, in bits. the value of
+              %uintarb is an integer ranging from 0 to 2^(bits)-1
+              %inclusive.
+        
+        value %the unsigned integers value, stored in 32 bit words.
+              %value(1) is the most significant word, and value(words) the
+              %least. The numerical value of the uintarb is 
+              %value(1)*2^(words-1)+value(2)*2^(words-2)+...+value(words)
+              
+        topWordBits %If bits is not an integer mutliple of 32, then the 
+                    %most significant word, value(1), will be an unsigned
+                    %integer ranging from 0 to 2^(topWordBits)-1 inclusive.
+        
+        mask  %mask is a uint32 who's value is equal to 2^(topWordBits)-1.
+              %this is a convenient thing to store. 
+        
     end
     
     methods(Static)
+        %if varargin is empty
+        %given two uint32 words w1 and w2 add them together to obtain the 
+        %32 bit least significant bits of the sum (w3) and a 
+        %32 bit carry out that is either uint32(0) or uint32(1). 
+        
+        %if not empty, varargin can contain a "carry in" which is must be 1 
+        %or 0 of a standard matlab type. The function computes
+        %w1+w2+varargin{1} and produces  the 32 bit least significant bits 
+        %of the sum (w3) and a 32 bit carry out that is either uint32(0) 
+        %or uint32(1). 
+        
+        %N.B. it is easy to see that if w1 and w2 are unsigned 32 bit
+        %numbers and "carry" is a 32 bit number such that "carry" = 0 or
+        %"carry" = 1, then w1+w2+carry < 2^(33)-1, e.g. the result always
+        %fits in 33 bits.
+        
         function [w3,carryOut]  = addword(w1,w2,varargin)
             
             if(isempty(varargin))
@@ -43,16 +77,100 @@ classdef uintarb %this is a value class
         end
     end
     methods
-        function obj = uintarb(bits,valueWords)
+        
+        %Constructor
+        %Inputs: 
+        %bits = the precision to store the value. A uintarb is a positive
+        %integer on the range 0 to 2^bits-1 inclusive. 
+        %bits is assigned to the property bits and is used to set the 
+        %properties "words", "topWordBits", and "mask". See the properties
+        %section for descriptions before proceeding. 
+        
+        %valueWords = the value to be stored, passed as an array of 32-bit
+        %integers. 
+        
+        %varargin{1} may is a boolean, assumed to be false. If true, it
+        %will supress warnings. 
+        
+        %If length(valueWords) < words, the constructor preprends 
+        %words-length(valueWords) elements equal to uint32(0) to
+        %"valueWords" and sends a warning if warnings are not suppressed.
+        %This is equivalent to assuming that the most significant 
+        %words are equal to uint32(0). This can
+        %be thought of as an increasing cast
+        
+        %If length(valueWords) > words, the first (most significant)   
+        %length(valueWords)-words elements of valueWords will be ignored,
+        %and valueWords will be reassigned the the least significant 
+        %words= ceil(bits/32) elements of valueWords. A warning will be 
+        %issued if not suppressed. The program then continues as if 
+        %length(valueWords) = words. This is a decreasing cast.
+        
+        %if length(valueWords) = words, in most cases valueWords(1) should 
+        %be a uint32 on the range 0 to 2^topWordBits-1 inclusive 
+        %(where "topWordBits" is the property). The constructor will
+        %truncate the most significant 32-topWordBits bits from value(1)
+        %using mask. This is a decreasing cast. 
+        %If after truncation, value(1) ~= valueWords(1),  a warning will be
+        %issued, if not suppressed. This is a decreasing cast.
+        
+        %Note that up to two such "decreasing cast" warnings may be issued.
+        %Consider call a = uintarb(7,[uint32(3542),uint32(255)]).
+        %A seven bit integer is stored in one 32 bit word, so the most
+        %significant word of [uint32(3542),uint32(255)] will be truncated, 
+        %resulting in a warning. 
+        %The funcation call proceeds as if we've called a= uintarb(7,[255])
+        %modulo the warning. 
+        
+        %While 255 can be stored in 8 bits, it cannot be stored in
+        %7 so a warning will be issued if not suppressed
+        %, and the most significant bit truncated. The program proceeds as
+        %if we've called a= uintarb(7,[127]) (since 127 =
+        %bitand(uint32(255),mask)). 
+        
+        %In summary
+        %a = uintarb(7,[uint32(3542),uint32(127)]) %one (word level) 
+                                                    %overflow warning
+        %b = uintarb(7,[uint32(255)]) %one (bit level) overflow warning
+        %c = uintarb(7,[uint32(3542),uint32(255)]) %both overflow warnings
+        %d = uintarb(7,[uint32(127)]) %no warnings
+        %But we have (cf. eq below)
+        %eq(a,b) //will be "true"
+        %eq(a,c) //will be "true"
+        %eq(a,d) //will be "true"
+        %eq(b,c) //will be "true"
+        %eq(b,d) //will be "true"
+        %eq(c,d) //will be "true"
+        
+        function obj = uintarb(bits,valueWords,varargin)
             
+            if(isempty(varargin)||~islogical(varargin{1}))
+                suppressWarnings = false;
+            else
+                suppressWarnings = varargin{1};
+            end
+                
             obj.words = ceil(bits/32);
             obj.bits = bits;
-            if(length(valueWords)==obj.words)
-                obj.value = uint32(valueWords);
-            else
-                warning('I''m filling in zeros for most significant words');
+            
+            if(length(valueWords)<obj.words)
+                if(~suppressWarnings)
+                    warning('I''m filling in zeros for most significant words');
+                end
                 obj.value = uint32(zeros(1,obj.words));
                 obj.value(((obj.words-length(valueWords))+1):end) = uint32(valueWords);
+            else
+                
+                if(length(valueWords) > obj.words)
+                    if(~suppressWarnings)
+                        warning('I''m truncating the most significant words');
+                    end
+                    wordDiff = length(valueWords)-obj.words;
+                    valueWords = valueWords(wordDiff+1:end); %will be masked by uintarbcontstructor
+                end
+                    
+                obj.value = uint32(valueWords);
+
             end
             
             mask = uint32(0);
@@ -63,13 +181,33 @@ classdef uintarb %this is a value class
             obj.mask = bitcmp(mask,'uint32');
             obj.topWordBits = bits- (obj.words-1)*32;
             obj.value(1) = bitand(obj.value(1),obj.mask);
+            if((~suppressWarnings) && (obj.value(1)~= valueWords(1)))
+                warning('I''m truncating the most significant bits');
+            end
             
         end
+        
+
+        %leftShift is and in-place left-shift operation. For "a" an uintarb
+        %leftShift(a,places) is notionally equivalent to "a<<places" in 
+        %C/C++/Java/etc.
+        
+        %Inputs:
+        %obj = a uintarb
+        %places = the number of bit indices to left shift. Must be
+        %nonnegative
+        
+        %Output
+        %obj = a unintarb object, with the same number of bits as the 
+        %input. The numerical value of the output has a binary expansion
+        %given by the obj.bits least significant bits of 
+        %2^places*(the numerical value of obj). (Shift in zeros, ignore
+        %overflow).
         
         function obj = leftShift(obj,places)
             
             if(places<0)
-                error('don''t do that')
+                error('places must be nonnegative')
             end
             
             nWordShift = floor(places/32);
@@ -100,11 +238,24 @@ classdef uintarb %this is a value class
             obj.value(1) = bitand(obj.value(1),obj.mask);
         end
         
+        %rightShift is and in-place right-shift operation For "a" an
+        %uintarb rightshift(a,places) is notionally equivalent to 
+        %"a>>places" in C/C++/Java/etc.
+        
+        %Inputs:
+        %obj = a uintarb
+        %places = the number of bit indices to right shift. Must be
+        %nonnegative. 
+        
+        %Output
+        %obj = a unintarb object, with the same number of bits as the 
+        %input and a numerical value equal to
+        %floor((the numerical value of obj)/2^places).
        
         function obj = rightShift(obj,places)
             
             if(places<0)
-                error('don''t do that')
+                error('places must be nonnegative')
             end
             
             nWordShift = floor(places/32);
@@ -134,13 +285,30 @@ classdef uintarb %this is a value class
             obj.value(1) = bitand(obj.value(1),obj.mask);%not necessary
         end
         
+        %shift is a wrapper for leftShift and rightShift. 
+        %Inputs:
+        %obj = a uintarb
+        %places = an integer
+        %Output:
+        %if places is nonnegative, returns leftShift(obj,places)
+        %if places is negative, returns rightShift(obj,-places)
+        
         function obj = shift(obj,places)
-           if(places>0)
+           if(places>=0)
                obj.leftShift(places);
            else
                obj.rightShift(-places);
            end
         end
+        
+        %not is in-place bitwise not.
+        %Inputs:
+        %obj = a uintarb
+        %Output:
+        %obj = a uintarb object with the same number of bits as the input. 
+        %Let "bits" be the number of bits in the input.
+        %The output has a numerical value equal to 2^(obj.bits)-1-(the
+        %numerical value of the input).
         
         function obj = not(obj)
             for idx = 1:obj.words
@@ -153,9 +321,9 @@ classdef uintarb %this is a value class
         function obj3 = and(obj1,obj2)
             
             if(obj1.bits > obj2.bits)
-                obj2 = uintarb(obj1.bits,obj2.value);
+                obj2 = uintarb(obj1.bits,obj2.value,true);
             elseif(obj1.bits<obj2.bits)
-                obj1 = uintarb(obj2.bits,obj1.value);
+                obj1 = uintarb(obj2.bits,obj1.value,true);
             end
             
             newValue = zeros(1,obj1.words);
@@ -165,7 +333,6 @@ classdef uintarb %this is a value class
             
             newValue(1) = bitand(newValue(1),obj1.mask);%not necessary
             obj3 = uintarb(obj1.bits,newValue);
-            
             
         end
         
@@ -374,7 +541,7 @@ classdef uintarb %this is a value class
                 newValue(((newWords-length(old.value))+1):end) = uint32(old.value);
             end
             
-            new = uintarb(bits,newValue);
+            new = uintarb(bits,newValue,true);
             
         end
         
@@ -394,7 +561,7 @@ classdef uintarb %this is a value class
                 if(sum(old.value==uint32(0)) < wordDiff || (newTopWordBits~=32 && newValue(1)> uint32(2^newTopWordBits-1)) )
                     overflow = true;
                 end
-                new = uintarb(bits,newValue);%will mask top word automatically            
+                new = uintarb(bits,newValue,true);%will mask top word automatically            
             end
             
             
