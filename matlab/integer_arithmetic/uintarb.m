@@ -318,6 +318,18 @@ classdef uintarb
             obj.value(1) = bitand(obj.value(1),obj.mask);%necessary
         end
         
+        %and is bitwise and.
+        %Inputs:  obj1, obj2 = uintarb operands
+        %Outputs: obj3, a uintarb with obj3.bits = max(obj1.bits,obj2.bits)
+        %
+        %The function first casts argmin(obj1.bits,obj2.bits) to the size
+        %given by max(obj1.bits,obj2.bits). This just adds leading zeros.
+        %obj3.value is the bitwise and computed between the casted words in
+        %obj1.value and obj2.value. The speed of this operation
+        %should be improved by noting that any increasing cast simply
+        %preprends leading zeros, which guarantees leading zeros in the
+        %result.
+        
         function obj3 = and(obj1,obj2)
             
             if(obj1.bits > obj2.bits)
@@ -336,6 +348,15 @@ classdef uintarb
             
         end
         
+        
+        %or is bitwise or.
+        %Inputs: obj1, obj2 = uintarb operands
+        %Outputs: obj3= a uintarb with obj3.bits = max(obj1.bits,obj2.bits)
+        %
+        %The function first casts argmin(obj1.bits,obj2.bits) to the size
+        %given by max(obj1.bits,obj2.bits). This just adds leading zeros.
+        %obj3.value is the bitwise OR computed between the casted words in
+        %obj1.value and obj2.value. 
         function obj3 = or(obj1,obj2)
             
             if(obj1.bits > obj2.bits)
@@ -354,13 +375,29 @@ classdef uintarb
             
         end
         
+        %minus is unsigned subtraction
+        %Inputs: obj1, obj2 =  uintarb operands.
+        %Outputs: 
+        %difference= a uintarb with 
+        %difference.bits = max(obj1.bits,obj2.bits)
+        %difference.value is such that the numerical value of difference is
+        %given by:
+        %(numerical value of obj1)-(numerical value of obj2) when 
+        %(numerical value of obj1)>=(numerical value of obj2)
+        %or
+        %(numerical value of obj1)-(numerical value of obj2)+...
+        %... 2^max(obj1.bits,obj2.bits),
+        %when (numerical value of obj1)<(numerical value of obj2)
+        %
+        %underflow = a logical variable that is true if obj1 has a
+        %numerical value that is less than obj2. 
         
         function [difference,underflow] = minus(obj1,obj2)
             
             if(obj1.bits > obj2.bits)
-                obj2 = uintarb(obj1.bits,obj2.value);
+                obj2 = uintarb(obj1.bits,obj2.value,true);
             elseif(obj1.bits<obj2.bits)
-                obj1 = uintarb(obj2.bits,obj1.value);
+                obj1 = uintarb(obj2.bits,obj1.value,true);
             end
             
         
@@ -394,16 +431,26 @@ classdef uintarb
         end
         
         
+        %plus is unsigned addition
+        %Inputs: obj1, obj2 =  uintarb operands.
+        %Outputs: 
+        %obj3 = a uintarb such that 
+        %obj3.bits = max(obj1.bits,obj2.bits)
+        %obj3.value = the least significant bits of the sum of the
+        %numerical values of obj1 and obj2. 
+        %carryOut = a one bit carry, which is given by uint32(1) if the sum
+        %overflows and uint32(0) otherwise. 
         
-        
-        
-        
+        %We have:
+        %(numerical value of obj3) + ... 
+        %...(numerical value of carryOut)*2^obj3.bits =...
+        %       ...(numerical value of obj1)+(numerical value of obj2).
         function [obj3,carryOut] = plus(obj1,obj2)
             
             if(obj1.bits > obj2.bits)
-                obj2 = uintarb(obj1.bits,obj2.value);
+                obj2 = uintarb(obj1.bits,obj2.value,true);
             elseif(obj1.bits<obj2.bits)
-                obj1 = uintarb(obj2.bits,obj1.value);
+                obj1 = uintarb(obj2.bits,obj1.value,true);
             end
             
             carryOut= uint32(0);
@@ -436,11 +483,22 @@ classdef uintarb
             obj3 = uintarb(obj1.bits,value3);
         end
         
+        %ne is not equal
+        %Inputs: obj1, obj2 = two uintarbs
+        %Outputs:
+        %bool = a logical, true if and onld if the numerical values of
+        %obj1 and obj2 are not equal.
+        %
+        %obj1.bits need not equal obj2.bits, an increasing cast will be
+        %made. The speed of this function could be improved by avoiding a
+        %cast and checking for inequality from least significant to most
+        %significant bits. 
+        
         function bool = ne(obj1,obj2)
             if(obj1.bits > obj2.bits)
-                obj2 = uintarb(obj1.bits,obj2.value);
+                obj2 = uintarb(obj1.bits,obj2.value,true);
             elseif(obj1.bits<obj2.bits)
-                obj1 = uintarb(obj2.bits,obj1.value);
+                obj1 = uintarb(obj2.bits,obj1.value,true);
             end
             
             i = obj1.words;
@@ -452,12 +510,21 @@ classdef uintarb
             
         end
         
+        %gt is greater than, 
+        %Inputs: obj1, obj2 = two uintarbs
+        %Outputs:
+        %bool = true if and only if the numerical value of obj1 exceeds 
+        %the numerical value of obj2. 
+        %obj1.bits need not equal obj2.bits, an increasing cast will be
+        %made. The speed of this function could be improved by avoiding a
+        %cast, at the expense of complicated code.
+        
         function bool = gt(obj1,obj2)
             
             if(obj1.bits > obj2.bits)
-                obj2 = uintarb(obj1.bits,obj2.value);
+                obj2 = uintarb(obj1.bits,obj2.value,true);
             elseif(obj1.bits<obj2.bits)
-                obj1 = uintarb(obj2.bits,obj1.value);
+                obj1 = uintarb(obj2.bits,obj1.value,true);
             end
             
             idx = 1;
@@ -468,17 +535,25 @@ classdef uintarb
             
         end
         
+        %le is less than or equal to
+        %Inputs: obj1, obj2 = two uintarbs
+        %Outputs:
+        %bool = true if and only if the numerical value of obj1 does not
+        %exceed the numerical value of obj2. Calls gt. 
+        
         function bool = le(obj1,obj2)
             bool = ~gt(obj1,obj2);
         end
+        
+        
         
         function bool = lt(obj1,obj2)
            
             %le(obj1,obj2)&neq(obj1,obj2)
             if(obj1.bits > obj2.bits)
-                obj2 = uintarb(obj1.bits,obj2.value);
+                obj2 = uintarb(obj1.bits,obj2.value,true);
             elseif(obj1.bits<obj2.bits)
-                obj1 = uintarb(obj2.bits,obj1.value);
+                obj1 = uintarb(obj2.bits,obj1.value,true);
             end
             
             idx = 1;
@@ -541,7 +616,7 @@ classdef uintarb
                 newValue(((newWords-length(old.value))+1):end) = uint32(old.value);
             end
             
-            new = uintarb(bits,newValue,true);
+            new = uintarb(bits,newValue);
             
         end
         
