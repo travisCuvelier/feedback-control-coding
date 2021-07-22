@@ -1,4 +1,4 @@
-classdef arithmeticEncoder32 < handle
+classdef streamingEncoder32 < handle
    
     properties(Constant)
         
@@ -20,9 +20,7 @@ classdef arithmeticEncoder32 < handle
         cutoff %if symbol > cutoff send 0, then send an elias coded integer
         low
         high
-        bidx
         buff
-        file
     end
     
     methods(Static=true)
@@ -51,25 +49,31 @@ classdef arithmeticEncoder32 < handle
     
     methods
         %constructor
-        function obj = arithmeticEncoder32(model,fileName)
+        function obj = streamingEncoder32(model)
             
             obj.topValue = bitshift(uint32(1),obj.wordSize)-1;%have to modify by hand
             obj.firstQuarter = bitshift(obj.topValue,-2)+1;
             obj.half = bitshift(obj.firstQuarter,1);
             obj.thirdQuarter = obj.half+obj.firstQuarter;
-            obj.low = uint32(0);
-            obj.high = obj.topValue; 
             obj.bitsToFollow = uint32(0); 
             obj.model  = model; 
-            obj.buff = uint16(0);
-            obj.bidx = obj.wordSize-1;
-            obj.file = fopen(fileName,'w');
+            obj.buff = [];
         
         end
         
+        function buffer = getCodeword(obj,symbol)
+            
+            obj.buff = [];
+            obj.low = uint32(0);
+            obj.high = obj.topValue; 
+            obj.encodeSymbol(symbol);
+            obj.endEncoding();
+            buffer = obj.buff;
+            
+        end
         
         function encodeSymbol(obj,symbol)
-            
+       
             symbolIdx = symbol+1; 
             
             range = (obj.high-obj.low)+1; %this is in 32 bits so it won't overflow; 
@@ -95,8 +99,6 @@ classdef arithmeticEncoder32 < handle
                 
                 %i don't think these masking operations are necessary
                 %debugging likelily culprit.
-             
-
                 obj.low  = bitshift(obj.low,1);
                 obj.high = bitshift(obj.high,1)+1;
             end 
@@ -105,53 +107,27 @@ classdef arithmeticEncoder32 < handle
         
         %precondition buffer is not full
         function bitPlusFollow(obj,bit)
+            bit = logical(bit);
+            obj.buff= [obj.buff,bit];            
    
-            obj.buff= obj.buff+bitshift(uint16(bit),obj.bidx);
-            
-            if(obj.bidx == 0)
-                obj.bidx = obj.wordSize-1;
-                fwrite(obj.file,obj.buff,'uint16');
-                obj.buff = uint16(0);
-            else
-                obj.bidx = obj.bidx-1; 
-            end 
-            
-            while(obj.bitsToFollow > 0)
-                
-                obj.buff= obj.buff+bitshift(uint16(~bit),obj.bidx);
-                
-                if(obj.bidx == 0)
-                    obj.bidx = obj.wordSize-1;
-                    fwrite(obj.file,obj.buff,'uint16');
-                    obj.buff = uint16(0);
-                else
-                    obj.bidx = obj.bidx-1; 
-                end 
-                
+            while(obj.bitsToFollow > 0)          
+                obj.buff= [obj.buff,~bit];       
                 obj.bitsToFollow = obj.bitsToFollow-1;
-            end
-            
+            end 
             
         end
         
         function endEncoding(obj)%worried about this. 
             
             obj.bitsToFollow = obj.bitsToFollow+1;
-            
             if (obj.low < obj.firstQuarter)
                 bitPlusFollow(obj,false)
-                fprintf('here')
             else
                 bitPlusFollow(obj,true)
-                fprintf('there');
             end
             
-            %ensure that the last word is written. 
-            while(obj.bidx~=(obj.wordSize-1))
-                bitPlusFollow(obj,false)
-            end
+            %we probably need to autobuffer in decoder.
             
-            fclose(obj.file);
         end
             
             

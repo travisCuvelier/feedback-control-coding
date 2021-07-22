@@ -5,7 +5,7 @@ close all
 encoderModel = cutoffCounts32(2); 
 encoder = arithmeticEncoder32(encoderModel,'data');
 
-symbols = sum((rand([2,1e6])>.3));
+symbols = sum((rand([2,1e5])>.3));
 
 
 for symbolCount = 1:numel(symbols)

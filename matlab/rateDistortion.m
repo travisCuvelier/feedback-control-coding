@@ -98,6 +98,7 @@ function policy = rateDistortion(A,B,W,Q,R,lqgCost,varargin)
         policy.C = (Uprime(:,1:rk))';
         policy.V = eye(rk)/12;
         policy.solverDiagnostics = diagnostic;
+        policy.K = K;
     else
         policy.minimumBits = inf;
     end

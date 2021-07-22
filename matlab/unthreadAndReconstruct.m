@@ -6,7 +6,7 @@ function recon = unthreadAndReconstruct(n,varargin)
         delta =varargin{1};
     end
     
-    recon = (mod(n,2)==0)*delta*n/2+(mod(n,2))*-1*delta*(n-1)/2;
+    recon = (mod(n,2)==0).*(delta.*n)/2-(mod(n,2)).*(delta.*(n-1))/2;
         
 end
 

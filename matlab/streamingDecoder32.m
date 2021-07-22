@@ -1,4 +1,4 @@
-classdef arithmeticDecoder32 < handle
+classdef streamingDecoder32 < handle
    
     properties(Constant)
         
@@ -13,37 +13,48 @@ classdef arithmeticDecoder32 < handle
         topValue
         firstQuarter
         half
-        thirdQuarter
+        thirdQuarter 
         cutoff %if symbol > cutoff send 0, then send an elias coded integer
         low
         high
         buff
-        file
         value
-        bitsInBuffer
+        codeword
     end
     
     
     methods
         %constructor
-        function obj = arithmeticDecoder32(model,fileName)
+        function obj = streamingDecoder32(model)
             obj.topValue = bitshift(uint32(1),obj.wordSize)-1;%have to modify by hand
             obj.firstQuarter = bitshift(obj.topValue,-2)+1;
             obj.half = bitshift(obj.firstQuarter,1);
             obj.thirdQuarter = obj.half+obj.firstQuarter;
-            obj.low = uint32(0);
-            obj.high = obj.topValue; 
             obj.model  = model;
-            warning('The encoder updates the model as it encodes, ensure that the model you pass in is "new" and initialized the same as with the encoder. DO NOT PASS IN THE ENCODER MODEL HANDLE');
-            obj.file = fopen(fileName,'r');
-            obj.value = uint32(fread(obj.file,1,'uint16'));
-            obj.buff =  uint16(fread(obj.file,1,'uint16'));%this outer cast
-            if(isempty(obj.buff))                          %is actually reqd                                                         %required.
-               obj.buff =  uint16(0);  
-            end                                             
-            obj.bitsInBuffer = obj.wordSize; 
+            warning('The encoder updates the model as it encodes, ensure that the model you pass in is "new" and initialized the same as with the encoder. DO NOT PASS IN THE ENCODER MODEL HANDLE');  
+            %fix fields 
         end
         
+        function symbol = decodeCodeword(obj,codeword)
+            
+            obj.codeword = codeword; 
+            obj.low = uint32(0);
+            obj.high = obj.topValue; 
+
+            if(length(codeword) < obj.wordSize)
+                obj.codeword = [codeword, zeros(1,obj.wordSize-length(codeword),'logical')];
+            end
+            
+            obj.value = uint32(0);
+
+            for idx = 1:obj.wordSize
+                obj.value = obj.value+bitshift(uint32(obj.codeword(idx)),obj.wordSize-idx);
+            end
+            obj.codeword = obj.codeword((obj.wordSize+1):end);
+            symbol = obj.decodeSymbol;   
+            
+        end
+     
         function symbol =  decodeSymbol(obj)%does not actually even output any bits
      
             range = (obj.high-obj.low)+1; %this is in 32 bits so it won't overflow; Initially should be 2^wordSize
@@ -77,24 +88,15 @@ classdef arithmeticDecoder32 < handle
             
         end
         
-        %precondition, we have at least one bit in the buffer
         function nextBit = nextBit(obj)
-            %mask the next bit in the buffer via
-            %mnb = bitand(uint16(2^(obj.bitsInBuffer-1)),obj.buff)
-            %shift to position  
-            %nextBit = bitshift(mnb,-(obj.bitsInBuffer-1)
-            %refill buffer if its empty. 
-            
-            nextBit = uint32(bitshift(bitand(uint16(2^(obj.bitsInBuffer-1)),obj.buff),(1-obj.bitsInBuffer)));
-            obj.bitsInBuffer = obj.bitsInBuffer-1;
-            if(obj.bitsInBuffer == 0)
-                obj.buff =  uint16(fread(obj.file,1,'uint16'));
-                if(isempty(obj.buff))                        
-                    obj.buff =  uint16(0);  
-                end    
-                %need to handle if this doesn't work!
-                obj.bitsInBuffer = obj.wordSize;
+           
+            if(isempty(obj.codeword))
+                nextBit = uint32(0);
+            else
+                nextBit = uint32(obj.codeword(1));
+                obj.codeword = obj.codeword(2:end);%check this
             end
+                        
         end
             
             

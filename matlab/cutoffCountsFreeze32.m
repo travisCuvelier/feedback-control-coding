@@ -1,4 +1,4 @@
-classdef cutoffCounts32 < handle
+classdef cutoffCountsFreeze32 < handle
     %UNTITLED2 Summary of this class goes here
     %   Detailed explanation goes here
     
@@ -10,6 +10,7 @@ classdef cutoffCounts32 < handle
         nearMiss 
         symbolLimit
         lop
+        printbool
     end
     
     properties(Constant)
@@ -44,7 +45,7 @@ classdef cutoffCounts32 < handle
     
     methods
         %constructor
-        function obj = cutoffCounts32(cutoff)
+        function obj = cutoffCountsFreeze32(cutoff)
             obj.total_iterations = uint32(0);
             obj.maxDenominator =  bitshift(uint32(2^obj.wordSize),-2)-1;    %2(# of symbols)+maxSymbolUpToIncludingTimei+1 can equal this.
             obj.nearMiss = ((obj.maxDenominator-1)/8)*7; %heuristic: don't send any
@@ -58,6 +59,7 @@ classdef cutoffCounts32 < handle
             obj.lop = uint32((cutoff+1):-1:0);
             obj.myCDF = obj.lop; %this is a uniform CDF
             obj.symbolLimit = cutoff;
+            obj.printbool = true;
         end
         
         %precondition: current model is valid.
@@ -68,25 +70,14 @@ classdef cutoffCounts32 < handle
                 symbol = 0;  
             end
             
-            if(obj.nearMiss-obj.myCDF(1)>1)
+            if(obj.nearMiss-obj.myCDF(1)>1) %freeze model if this thing blows
                 obj.myCDF(1:(symbol+1)) = obj.myCDF(1:(symbol+1))+1;
-            else
-                if(~isempty(varargin))
-                    fprintf('rescaled at time %d\n',varargin{1});
-                end
-                
-                obj.myCDF = bitshift((obj.myCDF-obj.lop),-1);
-                
-                %if input myCDF is valid, this one is definitely valid since lop subtracts one symbol from every frequency
-                obj.myCDF(1:(symbol+1)) = obj.myCDF(1:(symbol+1))+1;
-                
-                while( (obj.nearMiss - obj.myCDF(1)) <= obj.lop(1) )%lee is important. check other model
-                    obj.myCDF =  bitshift(obj.myCDF,-1); 
-                end 
-                
-                obj.myCDF = obj.myCDF+obj.lop;
-                
+            elseif(obj.printbool && ~isempty(varargin))
+                fprintf('froze at time %d\n',varargin{1});
+                obj.printbool = false;
             end
+                
+            
             
         end
         
