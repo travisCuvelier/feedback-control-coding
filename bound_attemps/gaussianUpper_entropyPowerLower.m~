@@ -1,0 +1,8 @@
+A = 1.1;
+W = 1;
+fudge = 12/(2*pi*exp(1));
+[Ptilde,Phat] = meshgrid(.1:1:100,.1:1:100);
+TOP = inv(W)*(Phat./(Ptilde-Phat)).*(Ptilde+A^2*Ptilde-2*Phat)+1;
+BOTTOM = fudge*A^2*inv(W)*(Phat.*(Ptilde-Phat)./Ptilde)+1;
+
+TOP(Phat > Ptilde

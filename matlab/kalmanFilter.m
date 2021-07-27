@@ -16,6 +16,12 @@ classdef kalmanFilter < handle
         xpost %posterior estimator/prediction (t|t)
         Ppost %posterior estimator/prediction covariance  (t|t)
         
+        nskips %number of skipped measurements
+        
+        inputHistory
+        predictHistory
+        delays 
+        
     end
     
     properties(Access = private)
@@ -41,9 +47,14 @@ classdef kalmanFilter < handle
             obj.xpred = obj.AplusBK*obj.xpost;
             obj.Ppred = obj.A*(obj.Ppost)*obj.A'+obj.W;
             
+            obj.inputHistory = {};
+            obj.predictHistory = {};
+            obj.delays = 0; 
+            
+            
         end
         
-        function update(obj,measReal)
+        function update(obj,measReal,varargin)
             
             % meaurement update
             innov = measReal - obj.C*obj.xpred;
@@ -55,9 +66,66 @@ classdef kalmanFilter < handle
             obj.Ppost = (obj.I-Kkf*obj.C)*obj.Ppred;
                   
             % predict update
-            obj.xpred = obj.AplusBK*obj.xpost;
+            if(isempty(varargin))
+                obj.xpred = obj.AplusBK*obj.xpost;
+            else
+                obj.xpred = obj.A*obj.xpost+obj.B*varargin{1};
+            end
+            
+            
             obj.Ppred = obj.A*(obj.Ppost)*obj.A'+obj.W;
             
+        end
+        
+        function pred = nStepPrediction(obj,n)
+            
+            if(obj.delays == 0)
+                
+                obj.delays = n;
+                
+                obj.predictHistory{1} = obj.xpred;
+                obj.inputHistory{1} = obj.K*obj.predictHistory{idx-1};
+
+                for idx = 2:n
+                    obj.predictHistory{idx} = obj.AplusBK*obj.predictHistory{idx-1};
+                    obj.inputHistory{idx} = obj.K*obj.predictHistory{idx};
+                end
+
+                pred = obj.predictHistory{n};
+                
+            elseif(obj.delays>=n)
+                
+                pred = obj.predictHistory{n};
+                
+            else
+                
+                for idx = (obj.delays+1):n
+                    obj.predictHistory{idx} = obj.AplusBK*obj.predictHistory{idx-1};
+                    obj.inputHistory{idx} = obj.K*obj.predictHistory{idx};
+                end
+                
+                obj.delays = n;
+                pred = obj.predictHistory{n};  
+                
+            end   
+            
+        end
+        
+        %meas is a cell array containing measurements
+        %precondition, numel(meas) is less than or equal to obj.delays
+        function delayedMeasurements(obj,measurements)
+            nmeas = numel(measurements);
+            if(nmeas>obj.delays)
+                error('you can''t integrate more measurements than there were delays')
+            else
+                for idx = 1:nmeas
+                    obj.update(measurements{idx},obj.inputHistory{idx})
+                end
+                
+                obj.delays = obj.delays-nmeas;
+                obj.inputHistory = obj.inputHistory{nmeas+1:end};
+                obj.predictHistory = obj.predictHistory{nmeas+1:end};
+            end
         end
         
     end

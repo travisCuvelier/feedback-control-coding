@@ -1,4 +1,4 @@
-classdef streamingDecoder32 < handle
+classdef streamingDecoder32_SFE < handle
    
     properties(Constant)
         
@@ -25,7 +25,7 @@ classdef streamingDecoder32 < handle
     
     methods
         %constructor
-        function obj = streamingDecoder32(model)
+        function obj = streamingDecoder32_SFE(model)
             obj.topValue = bitshift(uint32(1),obj.wordSize)-1;%have to modify by hand
             obj.firstQuarter = bitshift(obj.topValue,-2)+1;
             obj.half = bitshift(obj.firstQuarter,1);

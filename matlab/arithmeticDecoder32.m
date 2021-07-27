@@ -34,7 +34,7 @@ classdef arithmeticDecoder32 < handle
             obj.low = uint32(0);
             obj.high = obj.topValue; 
             obj.model  = model;
-            warning('The encoder updates the model as it encodes, ensure that the model you pass in is "new" and initialized the same as with the encoder. DO NOT PASS IN THE ENCODER MODEL HANDLE');
+            %warning('The encoder updates the model as it encodes, ensure that the model you pass in is "new" and initialized the same as with the encoder. DO NOT PASS IN THE ENCODER MODEL HANDLE');
             obj.file = fopen(fileName,'r');
             obj.value = uint32(fread(obj.file,1,'uint16'));
             obj.buff =  uint16(fread(obj.file,1,'uint16'));%this outer cast

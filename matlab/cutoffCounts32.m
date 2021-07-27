@@ -4,7 +4,6 @@ classdef cutoffCounts32 < handle
     
     properties (SetAccess = public, GetAccess = public)
         total_iterations
-        maxSymbol
         myCDF %(myCDF(i) = sum_{j>=i}counts(i)) if 
         maxDenominator
         nearMiss 

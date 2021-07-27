@@ -1,4 +1,4 @@
-classdef countModel32 < handle
+classdef countModel32 < handle, matlab.mixin.Copyable
     
     properties (SetAccess = public, GetAccess = public)
         total_iterations

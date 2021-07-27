@@ -2,11 +2,10 @@
 clear all
 close all
 rng(4)
-encoderModel = cutoffCounts32(2); 
-decoderModel = cutoffCounts32(2); 
-
-encoder = streamingArithmeticEncoder32(encoderModel);
-decoder = streamingArithmeticDecoder32(decoderModel);
+load('fixedModel012.mat');
+%opens fixedModel
+encoder = streamingArithmeticEncoder32(fixedModel);
+decoder = streamingArithmeticDecoder32(fixedModel);
 cw = [];
 nSymbols = 100000;
 txSymbols = sum((rand([2,nSymbols])>.3));
@@ -16,7 +15,6 @@ for idx = 1:nSymbols
     else
         cw = [cw,encoder.encodeSymbol(txSymbols(idx),false)];
     end
-    encoderModel.updateModel(txSymbols(idx)); 
 end
 
 rx = [];
@@ -28,24 +26,22 @@ while(~isempty(cw))
     end
     decoder.addBits(cw(1:bits2add));
     
-    number = 0;
+    symbol = decoder.decodeSymbol();    
     
-    while(1)
-        symbol = decoder.decodeSymbol();
-        if(symbol == -1)
-            fprintf('\nwaiting\n')
-            break
-        else
-            number = number+1;
-            rx = [rx,symbol];
-            decoderModel.updateModel(symbol); 
-        end
+    if(symbol == -1)
+        fprintf('\nwaiting\n');
     end
-
+    number = 0;%will get one when we break out of loop
+    while(symbol~=-1)
+        rx = [rx,symbol];
+        symbol = decoder.decodeSymbol();
+        number = number+1;
+    end
+    
     fprintf('\n decoded %d symbols \n',number);
     
     cw = cw((bits2add+1):end); 
     
 end
 
-errorRate = sum(rx(1:nSymbols)~=txSymbols)/nSymbols;
+errorRate = sum(rx(1:nSymbols)~=txSymbols)/nSymbols
