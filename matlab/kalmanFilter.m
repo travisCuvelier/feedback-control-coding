@@ -19,8 +19,10 @@ classdef kalmanFilter < handle
         nskips %number of skipped measurements
         
         inputHistory
-        predictHistory
-        delays 
+        missedMeasurements 
+        
+        xbest
+        t
         
     end
     
@@ -30,7 +32,7 @@ classdef kalmanFilter < handle
     end
     
     methods
-        function obj = kalmanFilter(A,B,C,W,V,K,xpost_init,Ppost_init)
+        function obj = kalmanFilter(A,B,C,W,V,K,xpost_init,Ppost_init,varargin)
             
             obj.A = A; %must be square
             obj.B = B;
@@ -44,87 +46,100 @@ classdef kalmanFilter < handle
             obj.I = eye(size(A,1));
             
             %first predict update
-            obj.xpred = obj.AplusBK*obj.xpost;
-            obj.Ppred = obj.A*(obj.Ppost)*obj.A'+obj.W;
-            
-            obj.inputHistory = {};
-            obj.predictHistory = {};
-            obj.delays = 0; 
-            
-            
-        end
-        
-        function update(obj,measReal,varargin)
-            
-            % meaurement update
-            innov = measReal - obj.C*obj.xpred;
-            dummy = obj.Ppred*obj.C'; %this memoization might
-                                      %be numerically bad        
-            S = obj.C*dummy+obj.V;
-            Kkf = dummy/S;
-            obj.xpost = obj.xpred+Kkf*innov;
-            obj.Ppost = (obj.I-Kkf*obj.C)*obj.Ppred;
-                  
-            % predict update
             if(isempty(varargin))
                 obj.xpred = obj.AplusBK*obj.xpost;
             else
                 obj.xpred = obj.A*obj.xpost+obj.B*varargin{1};
             end
             
+            obj.xbest = obj.xpost;
+            obj.t = 0;
+
             
             obj.Ppred = obj.A*(obj.Ppost)*obj.A'+obj.W;
             
-        end
-        
-        function pred = nStepPrediction(obj,n)
+            obj.inputHistory = {};
+            obj.missedMeasurements = 0; 
             
-            if(obj.delays == 0)
-                
-                obj.delays = n;
-                
-                obj.predictHistory{1} = obj.xpred;
-                obj.inputHistory{1} = obj.K*obj.predictHistory{idx-1};
-
-                for idx = 2:n
-                    obj.predictHistory{idx} = obj.AplusBK*obj.predictHistory{idx-1};
-                    obj.inputHistory{idx} = obj.K*obj.predictHistory{idx};
-                end
-
-                pred = obj.predictHistory{n};
-                
-            elseif(obj.delays>=n)
-                
-                pred = obj.predictHistory{n};
-                
-            else
-                
-                for idx = (obj.delays+1):n
-                    obj.predictHistory{idx} = obj.AplusBK*obj.predictHistory{idx-1};
-                    obj.inputHistory{idx} = obj.K*obj.predictHistory{idx};
-                end
-                
-                obj.delays = n;
-                pred = obj.predictHistory{n};  
-                
-            end   
             
         end
         
-        %meas is a cell array containing measurements
-        %precondition, numel(meas) is less than or equal to obj.delays
-        function delayedMeasurements(obj,measurements)
-            nmeas = numel(measurements);
-            if(nmeas>obj.delays)
-                error('you can''t integrate more measurements than there were delays')
-            else
-                for idx = 1:nmeas
-                    obj.update(measurements{idx},obj.inputHistory{idx})
+        %can only call once per time step
+        %not efficient. think about this. 
+        function update(obj,measReal,controlInput)
+            warning('can only call once per time step');
+            obj.t = obj.t+1;
+            
+            
+            if(isempty(measReal))
+                
+                obj.missedMeasurements = obj.missedMeasurements+1;
+                obj.inputHistory{obj.missedMeasurements} = controlInput;
+                obj.xbest = obj.A*obj.xbest+obj.B*controlInput;       
+                
+            elseif(obj.missedMeasurements == 0)
+                
+                if(numel(measReal)>1)
+                    error('trying to integrate too many measurements')
                 end
                 
-                obj.delays = obj.delays-nmeas;
-                obj.inputHistory = obj.inputHistory{nmeas+1:end};
-                obj.predictHistory = obj.predictHistory{nmeas+1:end};
+                % meaurement update
+                innov = measReal{1} - obj.C*obj.xpred;
+                dummy = obj.Ppred*obj.C'; %this memoization might
+                                      %be numerically bad        
+                S = obj.C*dummy+obj.V;
+                Kkf = dummy/S;
+                obj.xpost = obj.xpred+Kkf*innov;
+                obj.Ppost = (obj.I-Kkf*obj.C)*obj.Ppred;
+                obj.xpred = obj.A*obj.xpost+obj.B*controlInput;
+                obj.Ppred = obj.A*(obj.Ppost)*obj.A'+obj.W;
+                obj.xbest = obj.xpost; 
+                
+            else
+                
+                if(numel(measReal)>(1+obj.missedMeasurements))
+                    error('trying to integrate too many measurements')
+                end
+                                
+                for idx = 1:min(numel(measReal),obj.missedMeasurements)
+                    innov = measReal{idx} - obj.C*obj.xpred;
+                    dummy = obj.Ppred*obj.C';
+                    S = obj.C*dummy+obj.V;
+                    Kkf = dummy/S;
+                    obj.xpost = obj.xpred+Kkf*innov;
+                    obj.Ppost = (obj.I-Kkf*obj.C)*obj.Ppred;
+                    obj.xpred = obj.A*obj.xpost+obj.B*obj.inputHistory{idx};
+                    obj.Ppred = obj.A*(obj.Ppost)*obj.A'+obj.W;
+                end
+                
+                if(min(numel(measReal),obj.missedMeasurements)==obj.missedMeasurements)
+                    obj.inputHistory= {};
+                else
+                    obj.inputHistory = obj.inputHistory{(numel(measReal)+1):end};
+                end                
+                
+                obj.missedMeasurements = 1+obj.missedMeasurements-numel(measReal);
+                
+                if(obj.missedMeasurements==0)
+                    innov = measReal{end} - obj.C*obj.xpred;
+                    dummy = obj.Ppred*obj.C'; %this memoization might
+                                      %be numerically bad        
+                    S = obj.C*dummy+obj.V;
+                    Kkf = dummy/S;
+                    obj.xpost = obj.xpred+Kkf*innov;
+                    obj.Ppost = (obj.I-Kkf*obj.C)*obj.Ppred;
+                    obj.xpred = obj.A*obj.xpost+obj.B*controlInput;
+                    obj.Ppred = obj.A*(obj.Ppost)*obj.A'+obj.W;
+                    obj.xbest = obj.xpost; 
+                    obj.missedMeasurements = 0;
+                else
+                    obj.inputHistory{obj.missedMeasurements} = controlInput;
+                    obj.xbest = obj.xpost; 
+                    for idx = 1:obj.missedMeasurements
+                        obj.xbest = obj.A*obj.xbest+obj.B*obj.inputHistory{idx};
+                    end
+                end
+                
             end
         end
         
