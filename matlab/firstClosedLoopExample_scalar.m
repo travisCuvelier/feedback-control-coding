@@ -20,12 +20,12 @@ x = zeros(plantDim,numIterations);
 y = zeros(plantDim,numIterations);
 
 sigma_init = sqrt(500);
-x(:,1) = sigma_init*randn(plantDim,1);
+x(:,1) = A*sigma_init*randn(plantDim,1);
 xpost_init = zeros(plantDim,1);
 Ppost_init = sigma_init^2*eye(plantDim);
 
 
-kf = kalmanFilter(A,B,policyStruct.C,W,policyStruct.V,policyStruct.K,xpost_init,Ppost_init);
+kf = kalmanFilter_dep(A,B,policyStruct.C,W,policyStruct.V,policyStruct.K,xpost_init,Ppost_init);
 
 cutoff = 101;
 encoderModel = cutoffCounts32(cutoff); 
