@@ -266,7 +266,7 @@ classdef uintarb
             obj.topWordBits = bits- (obj.words-1)*32;
             obj.value(1) = bitand(obj.value(1),obj.mask);
             %This warning is not quite right, will have to fix. 
-            if((~suppressWarnings) && (length(valueWords)==obj.words) &&(obj.value(1)~= valueWords(1)))
+            if((~suppressWarnings) && (obj.value(1)~= valueWords(1)))
                 warning('Overflow (bit level)');
             end
             

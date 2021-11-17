@@ -54,7 +54,7 @@ classdef sortedFixedCountsArb < handle
             obj.nSymbols = numel(counts);
             if(obj.nSymbols >intmax('uint32'))
                 error('number of symbols needs to be less than 2^32-1 for now...');
-            elseif(log2(obj.nSymbols)<floor(precision/4))
+            elseif(log2(obj.nSymbols)>floor(precision/2))
                 error('too many symbols for precision');
             end
             obj.counts = uintarb.empty();
@@ -66,6 +66,7 @@ classdef sortedFixedCountsArb < handle
                     obj.counts(idx) = uintarb(precision,[uint32(1)],true);
                 else
                     lastwarn('');
+                    counts(idx)
                     obj.counts(idx)= uintarb(precision,[uint32(counts(idx))],false);
                     if(strcmp(lastwarn,'Overflow (word level)')||strcmp(lastwarn,'Overflow (bit level)'))
                         error('Your intitialization overflowed precision.')
