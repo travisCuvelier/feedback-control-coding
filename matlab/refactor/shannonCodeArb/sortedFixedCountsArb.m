@@ -66,7 +66,6 @@ classdef sortedFixedCountsArb < handle
                     obj.counts(idx) = uintarb(precision,[uint32(1)],true);
                 else
                     lastwarn('');
-                    counts(idx)
                     obj.counts(idx)= uintarb(precision,[uint32(counts(idx))],false);
                     if(strcmp(lastwarn,'Overflow (word level)')||strcmp(lastwarn,'Overflow (bit level)'))
                         error('Your intitialization overflowed precision.')

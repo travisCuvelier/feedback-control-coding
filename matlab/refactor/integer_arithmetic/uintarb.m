@@ -238,9 +238,9 @@ classdef uintarb
             obj.bits = bits;
             
             if(length(valueWords)<obj.words)
-                if(~suppressWarnings)
-                    warning('I''m filling in zeros for most significant words');
-                end
+                %if(~suppressWarnings)
+                    %warning('I''m filling in zeros for most significant words');
+                %end
                 obj.value = uint32(zeros(1,obj.words));
                 obj.value(((obj.words-length(valueWords))+1):end) = uint32(valueWords);
             else

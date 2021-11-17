@@ -1,7 +1,7 @@
-numTrials = 100;
+numTrials = 10000;
 mx = 5;
 param = .3;
-precision = 33;
+precision = 34;
 sourceSymbols = min(geornd(param,[1,numTrials]),mx);
 counts = [9,1,2,1,1,1];
 encModel = sortedFixedCountsArb(counts,precision);
