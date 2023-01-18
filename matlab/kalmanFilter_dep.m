@@ -30,7 +30,7 @@ classdef kalmanFilter_dep < handle
     end
     
     methods
-        function obj = kalmanFilter(A,B,C,W,V,K,xpost_init,Ppost_init)
+        function obj = kalmanFilter_dep(A,B,C,W,V,K,xpost_init,Ppost_init)
             
             obj.A = A; %must be square
             obj.B = B;

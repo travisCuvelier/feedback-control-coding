@@ -3,25 +3,15 @@ close all
 %load('tanaka_SDP_sys');
 %policyStruct = rateDistortion(A,B,W,Q,R,31.7); %setting cost fo 32 gives a bitrate of about 8.7 bits/symbol 
 
-%I think a bound on the suboptimality of the MMSE estimator 
-%for a max delay of n is given by a^(2n)(Pmin-W/(1-a^2))+W/(1-a^2)
-%this bound is interesting when a is stable. it reduces to
-%max(W/(1-a^2),Pmin);
-%notably, this is independent of n.
-
-
 addpath('elias_omega')
-msetx = [];
-msetx2 = [];
-mserx1 =[];
-mserx2 =[];
 
-A =1;
+
+A = 2;
 B = .1; 
 W = 1;
 Q = 1;
 R = 1;
-policyStruct = rateDistortion(A,B,W,Q,R,12); %A = 2, 301.36 works for about 7.5 bits. A = 1, cost = 12, A = .9, cost = 4.5
+policyStruct = rateDistortion(A,B,W,Q,R,900); %301.36 works for about 7.5 bits.
 
 plantDim = size(A,1);
 
@@ -33,13 +23,12 @@ sigma_init = sqrt(500);
 xpost_init = zeros(plantDim,1);
 Ppost_init = sigma_init^2*eye(plantDim);
 inputDim = size(B,2);
-rxKF = kalmanFilter(A,B,policyStruct.C,W,policyStruct.V,policyStruct.K,xpost_init,Ppost_init,false);
-txKF = kalmanFilter(A,B,policyStruct.C,W,policyStruct.V,policyStruct.K,xpost_init,Ppost_init,false);
+rxKF = kalmanFilter(A,B,policyStruct.C,W,policyStruct.V,policyStruct.K,xpost_init,Ppost_init);
 controlInput = policyStruct.K*rxKF.xbest;
-x(:,1) = A*sigma_init*randn(plantDim,1)+B*controlInput+sqrtm(W)*randn(plantDim,1);
+x(:,1) = A*sigma_init*randn(plantDim,1)+B*controlInput;
 
 
-cutoff = 277;
+cutoff = 101;
 herald = 0;
 encoderModel = cutoffCounts32(cutoff); 
 encoder = streamingArithmeticEncoder32_herald(encoderModel,herald);
@@ -61,27 +50,19 @@ nMeasurementsRecieved = 0;
 predictMemory = [];
 txRecord = [];
 rxRecord = [];
-txMeasRec = [];
-rxMeasRec = [];
+
 for iteration = 1:numIterations
     
   if(iteration==numIterations)
       atEnd = true;
   end
   
-  xpred = txKF.xPred(controlInput); %E(x_{iteration|iteration-1 measurements}
+  xpred = rxKF.xPred(controlInput); %E(x_{iteration|iteration-1 measurements}
   innovation = policyStruct.C*(x(:,iteration)-xpred);
   txSymbol = quantizeAndThread(innovation+dither(:,iteration),diag(delta));
   txRecord = [txRecord,txSymbol];
-  
-  %when the decoder has recieved n measurements, it can compute E(x_(n+1|n)).
-  %to save time, we save this sequence using the encoder kf. 
   predictMemory(:,size(predictMemory,2)+1) = xpred; %E(x_{iteration|iteration-1 measurements}
   
-  %encoder knows what decoder will eventually recieve. 
-  measurementToBeRecieved = unthreadAndReconstruct(txSymbol,diag(delta))+policyStruct.C*xpred-dither(:,iteration);
-  %txMeasRec = [txMeasRec,measurementToBeRecieved];
-  txKF.update({measurementToBeRecieved},controlInput);
   
   %encode the codeword
   codeword = [];  
@@ -116,7 +97,7 @@ for iteration = 1:numIterations
           realSymbol = omegaDecodeStreaming(decoder.runningHistory);
           newRX = [newRX,realSymbol];
           eliasSize = numel(omegaEncode(realSymbol));
-          newDecoder = streamingArithmeticDecoder32_herald(decoderModel,herald);
+          newDecoder = streamingArithmeticDecoder32_herald(fixedModel,herald);
           if(eliasSize < length(decoder.runningHistory))
               newBits = decoder.runningHistory((eliasSize+1):end);
               newDecoder.addBits(newBits);
@@ -137,18 +118,12 @@ for iteration = 1:numIterations
   for idx = 1:nNewMeas
       nMeasurementsRecieved = nMeasurementsRecieved+1;
       newMeasurements{idx} = unthreadAndReconstruct(newRX(idx),diag(delta))+policyStruct.C*predictMemory(:,idx)-dither(:,nMeasurementsRecieved);
-      %rxMeasRec = [rxMeasRec,newMeasurements{idx}];
   end
   
-  delays(iteration) = iteration-nMeasurementsRecieved;
+  delays(iteration) = nMeasurementsRecieved-iteration;
   
   predictMemory = predictMemory(:,(nNewMeas+1):end);
   rxKF.update(newMeasurements,controlInput);
-  msetx = [msetx, txKF.Ppost];
-  msetx2 = [msetx2,(txKF.xpost-x(:,iteration))'*(txKF.xpost-x(:,iteration))];
-  mserx1 = [mserx1, rxKF.Ppost];
-  mserx2 = [mserx2, rxKF.Pbest];
-
   controlInput = policyStruct.K*rxKF.xbest;
   ccost(iteration) = (controlInput)'*R*controlInput;
   x(:,iteration+1) = A*x(:,iteration)+B*controlInput+sqrtm(W)*randn(plantDim,1);

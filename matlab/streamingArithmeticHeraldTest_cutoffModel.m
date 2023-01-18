@@ -38,7 +38,6 @@ for idx = 1:nSymbols
     decoder.addBits(newBits);
     
     
-    %THIS PART IS NOT DONE!!!
     while(1)
         symbol = decoder.decodeSymbol();
         if(symbol == -1)

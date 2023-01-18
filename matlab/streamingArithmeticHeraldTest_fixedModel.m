@@ -30,9 +30,7 @@ while(~isempty(cw))
     
     
     
-    
-    
-    
+   
     
     if(symbol == -1)
         fprintf('\nwaiting\n');

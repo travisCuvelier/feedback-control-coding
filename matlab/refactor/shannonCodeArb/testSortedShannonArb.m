@@ -1,9 +1,10 @@
+addpath('../integer_arithmetic')
 numTrials = 10000;
-mx = 5;
+mx = 12;
 param = .3;
-precision = 34;
+precision = 16;
 sourceSymbols = min(geornd(param,[1,numTrials]),mx);
-counts = [9,1,2,1,1,1];
+counts = ones([1,13]);
 encModel = sortedFixedCountsArb(counts,precision);
 decModel = sortedFixedCountsArb(counts,precision);
 enc = shannonEncoderArb(encModel,precision);
@@ -17,6 +18,9 @@ for idx = 1:numTrials
     encModel.updateModel(sourceSymbols(idx));
     decodedSymbols(idx) = dec.decodeCodeword(codeword);
     decModel.updateModel(decodedSymbols(idx));
+    if(mod(idx,25)==0)
+        idx
+    end
 end
 
 sum(sourceSymbols(1:numTrials)~=decodedSymbols(1:numTrials))

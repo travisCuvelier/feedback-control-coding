@@ -272,6 +272,18 @@ classdef uintarb
             
         end
         
+        function val = ret64(obj)
+            if(obj.bits<=64)
+                if(obj.bits > 32)
+                    val = uint64(obj.value(end-1))+uint64(obj.value(end));
+                else
+                    val =uint64(obj.value(end));
+                end
+            else
+                val = nan;
+            end
+        end
+        
 
         %leftShift is and in-place left-shift operation. For "a" an uintarb
         %leftShift(a,places) is notionally equivalent to "a<<places" in 
@@ -738,7 +750,7 @@ classdef uintarb
                 error('index out of range');
             end
             
-            myMask = uintarb(old.bits,[uint32(zeros(1,floor(old.bits/32))),uint32(1)]);
+            myMask = uintarb(old.bits,[uint32(zeros(1,floor(old.bits/32))),uint32(1)],true);%suppressing a warning here. I think this still works tho.
             myMask = leftShift(myMask,old.bits-1-bidx);  
      
             if(bool==0)

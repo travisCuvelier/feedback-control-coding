@@ -1,4 +1,4 @@
-classdef streamingArithmeticDecoder32 < handle
+classdef vectorArithmeticDecoder32 < handle
    
     properties(Constant)
         
@@ -9,7 +9,11 @@ classdef streamingArithmeticDecoder32 < handle
     end
     
     properties (SetAccess = public, GetAccess = public)
-        model
+        modelManager
+        dimensions
+        maxSymbolPerDimension
+        nSymbolsPerDimension
+
         topValue
         firstQuarter
         half
@@ -27,19 +31,23 @@ classdef streamingArithmeticDecoder32 < handle
     
     methods
         %constructor
-        function obj = streamingArithmeticDecoder32(model)
+        function obj = vectorArithmeticDecoder32(modelManager)
             obj.topValue = bitshift(uint32(1),obj.wordSize)-1;%have to modify by hand
             obj.firstQuarter = bitshift(obj.topValue,-2)+1;
             obj.half = bitshift(obj.firstQuarter,1);
             obj.thirdQuarter = obj.half+obj.firstQuarter;
             obj.low = uint32(0);
             obj.high = obj.topValue; 
-            obj.model  = model;
             warning('The encoder updates the model as it encodes, ensure that the model you pass in is "new" and initialized the same as with the encoder. DO NOT PASS IN THE ENCODER MODEL HANDLE');
             obj.value = uint32(0);
             obj.buff = [];
             obj.bitsInValue = 0; 
-            obj.nDummies = 0;
+
+            obj.modelManager = modelManager; 
+            obj.dimensions = obj.modelManager.dimensions; 
+            obj.maxSymbolPerDimension = obj.modelManager.maxSymbolPerDimension;
+            obj.nSymbolsPerDimension = obj.modelManager.nSymbolsPerDimension;
+
 
             %obj.value = uint32(fread(obj.file,1,'uint16'));
             %obj.buff =  uint16(fread(obj.file,1,'uint16'));%this outer cast
@@ -50,17 +58,13 @@ classdef streamingArithmeticDecoder32 < handle
         end
         
 
-        function addBits(obj,newBits)
-            
-            %need this invariant: if bitsInValue < wordSize then buffer is
+        function tuple = decodePacketAndUpdate(obj,newBits)
+                        %need this invariant: if bitsInValue < wordSize then buffer is
             %empty. 
-            
             if(obj.bitsInValue < obj.wordSize && ~isempty(obj.buff))
                 error('travis messed up');
             end
             
-            obj.value = bitshift(obj.value,-obj.nDummies);
-            obj.nDummies = 0;
             %initially fill value
             %maybe need a different procedure for initializ
             while(~isempty(newBits)&& obj.bitsInValue < obj.wordSize)
@@ -68,16 +72,42 @@ classdef streamingArithmeticDecoder32 < handle
                 newBits = newBits(2:end);
                 obj.bitsInValue = obj.bitsInValue+1;
             end
+
+            while(obj.bitsInValue < obj.wordSize)
+                obj.value = bitand(bitshift(obj.value,1),obj.codewordMask);
+                obj.bitsInValue = obj.bitsInValue+1;
+            end
             
             while(~isempty(newBits))
                 obj.buff = [obj.buff,newBits(1)];
                 newBits = newBits(2:end);
             end
+
+            tuple = zeros(1,obj.dimensions);
             
+            for didx = 1:obj.dimensions
+                model = obj.modelManager.getModel(didx,tuple(1:didx-1));
+                symbol = obj.decodeSymbol(model);
+                model.updateModel(symbol);
+                tuple(didx) = symbol;
+            end
+
+            %wipe the decoder state after each tuple. 
+            obj.topValue = bitshift(uint32(1),obj.wordSize)-1;%have to modify by hand
+            obj.firstQuarter = bitshift(obj.topValue,-2)+1;
+            obj.half = bitshift(obj.firstQuarter,1);
+            obj.thirdQuarter = obj.half+obj.firstQuarter;
+            obj.low = uint32(0);
+            obj.high = obj.topValue; 
+            obj.value = uint32(0);
+            obj.buff = [];
+            obj.bitsInValue = 0; 
         end
             
-            
-        function symbol =  decodeSymbol(obj)%does not actually even output any bits
+
+
+
+        function symbol =  decodeSymbol(obj,model)%does not actually even output any bits
      
             %we can decode a symbol so long as there are at least wordSize
             %bits in value;
@@ -86,14 +116,14 @@ classdef streamingArithmeticDecoder32 < handle
             
                 range = (obj.high-obj.low)+1; %this is in 32 bits so it won't overflow; Initially should be 2^wordSize
 
-                cum = idivide(((obj.value-obj.low+1)*obj.model.cumCount(0)-1),range);%shouldn't overflow but likely culprit
+                cum = idivide(((obj.value-obj.low+1)*model.cumCount(0)-1),range);%shouldn't overflow but likely culprit
 
                 symbolIdx = 1;
-                while(obj.model.cumCount(symbolIdx)>cum)
+                while(model.cumCount(symbolIdx)>cum)
                     symbolIdx = symbolIdx+1;
                 end
-                obj.high = obj.low + idivide((range*obj.model.cumCount(symbolIdx-1)),obj.model.cumCount(0))-1;
-                obj.low =  obj.low + idivide((range*obj.model.cumCount(symbolIdx)),obj.model.cumCount(0));
+                obj.high = obj.low + idivide((range*model.cumCount(symbolIdx-1)),model.cumCount(0))-1;
+                obj.low =  obj.low + idivide((range*model.cumCount(symbolIdx)),model.cumCount(0));
                
                 while((obj.high<obj.half) || (obj.low>= obj.half) || ((obj.low>= obj.firstQuarter)&&(obj.high<obj.thirdQuarter)) )
                     if(obj.low>= obj.half)
@@ -111,15 +141,11 @@ classdef streamingArithmeticDecoder32 < handle
                     
                     nb = obj.nextBit();  
                     if(nb == -1)
-                        fprintf('emergency\n')
                         %I think this might actually work. 
                         %high and low don't depend on the next bits.
                         %need to shift in someting into value or do
                         %something. 
-                        %this will not work as written
                         obj.value = bitand(bitshift(obj.value,1),obj.codewordMask);%shift in dummy zeros 
-                        obj.nDummies = obj.nDummies+1;
-                        obj.bitsInValue = obj.bitsInValue-1;
                     else
                         obj.value = bitand(bitshift(obj.value,1),obj.codewordMask)+nb;
                     end
