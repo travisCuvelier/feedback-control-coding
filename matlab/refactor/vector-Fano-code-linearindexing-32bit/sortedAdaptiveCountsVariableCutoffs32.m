@@ -1,13 +1,16 @@
-classdef sortedFixedCounts32 < handle
+classdef sortedAdaptiveCountsVariableCutoffs32 < handle
+         
     %UNTITLED2 Summary of this class goes here
     %   Detailed explanation goes here
     
     properties (SetAccess = public, GetAccess = public)
         total_iterations
         strictCDF
-        counts
+        counts %actual number of symbols
         maxDenominator 
         nSymbols
+        nSymbolsPerDim
+        nDims
         perm
         iperm
     end
@@ -44,12 +47,25 @@ classdef sortedFixedCounts32 < handle
     
     methods
         %constructor
-        function obj = sortedFixedCounts32(counts)
+        function obj = sortedAdaptiveCountsVariableCutoffs32(counts,biggestSymbolPerDimension)
+
+            if(~isrow(counts))
+                counts = counts.';
+                if(~isrow(counts))
+                    error('counts should be a one dimensional array')
+                end
+            end
+
+             obj.nSymbols = numel(counts);
+            if(obj.nSymbols~=prod(biggestSymbolPerDimension+1)) %counts must have a count for each combo of positive natural symbols and also combinations of overflows (0)
+                error('pidgeon hole issue');
+            end
+
         
             obj.total_iterations = uint32(0);
             obj.maxDenominator = uint32(2^obj.wordSize)-1;%This is the biggest
-            obj.nSymbols = numel(counts);
-            
+            obj.nSymbolsPerDim = biggestSymbolPerDimension+1;
+            obj.nDims = length(obj.nSymbolsPerDim);
             if(obj.nSymbols > obj.maxDenominator/2)
                 error('your precision is probably too low for this many symbols');
             end
@@ -59,16 +75,14 @@ classdef sortedFixedCounts32 < handle
                 error('counts must be nonnegative\n');
             end
             obj.counts(obj.counts==0)=uint32(1); 
-            obj.perm = 1:(obj.nSymbols+1);
+            obj.perm = 1:(obj.nSymbols);
             [obj.counts,b] = sort(obj.counts,'descend');
             obj.perm = obj.perm(b);
-            
             for idx = 1:obj.nSymbols
                 obj.iperm(obj.perm(idx))=idx;
             end
             
             obj.strictCDF = uint32(zeros(1,obj.nSymbols+1));
-            obj.strictCDF(1) = uint32(0); 
             for idx = 2:(obj.nSymbols+1)
                obj.strictCDF(idx) = obj.strictCDF(idx-1)+obj.counts(idx-1); 
                if(~(intmax('uint32')-obj.counts(idx-1)>=obj.strictCDF(idx-1)))
@@ -88,7 +102,8 @@ classdef sortedFixedCounts32 < handle
             
             obj.total_iterations=obj.total_iterations+1;
             
-            symbolIdx = obj.getIdxFromSymbol(symbol);
+            symbolIdx = obj.getLinearIdxFromSymbolTuple(symbol);
+
             obj.counts(symbolIdx) = obj.counts(symbolIdx)+1;
             
             if((obj.strictCDF(end)+uint32(1))>=obj.maxDenominator)%think can be equality
@@ -119,13 +134,20 @@ classdef sortedFixedCounts32 < handle
             end  
         end
         
-        
-        function symbolIdx = getIdxFromSymbol(obj,symbol)
-           symbolIdx = obj.iperm(symbol+1);  
+        %next step- rewrite sub2ind, ind2sub so that they are more
+        %efficient and memoize. 
+        function linearIdx = getLinearIdxFromSymbolTuple(obj,symbol)
+           dummy = num2cell(symbol+1);
+           indexTuple = sub2ind(obj.nSymbolsPerDim, dummy{:});
+           linearIdx = obj.iperm(indexTuple);  
         end
         
-        function symbol = getSymbolFromIdx(obj,symbolIdx)
-           symbol = obj.perm(symbolIdx)-1;  
+        function symbol = getSymbolTupleFromLinearIdx(obj,linearIdx)
+           linearIdx = obj.perm(linearIdx);
+           dummy = cell(1,obj.nDims);
+           [dummy{:}] = ind2sub(obj.nSymbolsPerDim,linearIdx);
+           indexTuple = cell2mat(dummy);
+           symbol = indexTuple-1;
         end
              
              
