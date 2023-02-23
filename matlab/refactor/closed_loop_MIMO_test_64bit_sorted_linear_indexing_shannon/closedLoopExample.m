@@ -2,7 +2,7 @@ clear all
 close all
 
 addpath('../../elias_omega')
-
+fprintf('make sure to remove advanpix libraries from path or else this will be slow!! \n')
 
 %inverted pendulum model from https://ctms.engin.umich.edu/CTMS/index.php?example=InvertedPendulum&section=ControlDigital
 
