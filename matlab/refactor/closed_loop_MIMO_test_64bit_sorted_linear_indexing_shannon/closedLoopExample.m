@@ -49,13 +49,29 @@ cutoffs = [1023,15,3,3]; %if cutoff= [21,21,21,21] the quantizer will
 uniformPrior = uint64(ones(prod(cutoffs+1),1));
 delta = eye(4);%sqrtm(12*policyStruct.V); to save time I hard coded delta
 herald = 0;
-
+ps_saved = {};
 trialIndex = 0;
-for targetControlCost = linspace(1.001*356.167,1.01*356.167,8)
- %linspace(356.167*.99999983,1.001*356.167,15)
-trialIndex = trialIndex+1;
+
+for targetControlCost = [356.167*.99999980875,356.167*.99999981,356.167*.99999985,356.167*.9999999,356.167,356.167*1.000001,356.167*1.00001 ,356.167*1.0001,356.167*1.001,356.167*1.01]
+    % 
+    % linspace(1.001*356.167,1.01*356.167,8)
+ %linspace(356.167*.99999983,1.001*356.167,15) 356.167*.9999998085, top 1.005*356.167
+
+ %356.167*.9999998085 = 20
+ % %356.167*.99999981 = 19
+ %356.167*.99999985 = 16
+%356.167*.9999999 = 14
+%356.167 = 13
+%356.167*1.000001 = 10
+%356.167*1.00001 = 7
+%356.167*1.0001 = 5
+%356.167*1.001 = 3
+%356.167*1.01 = 3
+
+    trialIndex = trialIndex+1;
     %sedumi can't really solve the RDF near the minimum LQG cost
-    policyStruct = rateDistortion(A,B,W,Q,R, targetControlCost,'mosek'); %about 13.5 bits
+    policyStruct= rateDistortion(A,B,W,Q,R, targetControlCost,'mosek'); %about 13.5 bits
+    ps_saved{trialIndex}  = policyStruct; 
     %policyStruct.C is the optimal measurement matrix assuming that the uniform
     %quantization sensitivity is unity. 
     %As such, policyStruct.V = eye(dimension)*sqrt(1/12);.
@@ -160,7 +176,7 @@ trialIndex = trialIndex+1;
     rate = mean(cwl);
     
     ctrlCost = mean(tcontrolcost)
-    saverstring = sprintf('day_4_trial_index_%d_num_its_%d.mat',trialIndex,numIterations)
+    saverstring = sprintf('day_7_trial_index_%d_num_its_%d.mat',trialIndex,numIterations)
     save(saverstring)
     fprintf('clock time \n')
     clock
